@@ -1,0 +1,266 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+
+struct Account {
+    char name[50];
+    char email[50];
+    char address[100];
+    char phone[15];
+    int acc_no;
+    int pin;
+    float balance;
+};
+
+int isValidName(char name[]) {
+    for (int i = 0; name[i] != '\0'; i++) {
+        if (!isalpha(name[i]) && name[i] != ' ')
+            return 0;
+    }
+    return 1;
+}
+
+int isValidPhone(char ph[]) {
+    if (strlen(ph) != 10) return 0;
+    for (int i = 0; i < 10; i++) {
+        if (!isdigit(ph[i])) return 0;
+    }
+    return 1;
+}
+
+void registerAccount() {
+    struct Account a;
+    FILE *fp = fopen("bankdata.dat", "ab");
+
+    printf("\n===== REGISTER =====\n");
+
+    while (1) {
+        printf("Enter Name        : ");
+        fgets(a.name, sizeof(a.name), stdin);
+        a.name[strcspn(a.name, "\n")] = 0;
+
+        if (isValidName(a.name)) {
+            printf("Valid Name\n");
+            break;
+        } else {
+            printf("Invalid Name! Only alphabets allowed.\n");
+        }
+    }
+
+    while (1) {
+        printf("Enter Email       : ");
+        fgets(a.email, sizeof(a.email), stdin);
+        a.email[strcspn(a.email, "\n")] = 0;
+
+        if (strstr(a.email, "@gmail.com")) {
+            printf("Valid Email\n");
+            break;
+        } else {
+            printf("Invalid email.\n");
+        }
+    }
+
+    printf("Enter Address     : ");
+    fgets(a.address, sizeof(a.address), stdin);
+    a.address[strcspn(a.address, "\n")] = 0;
+
+    while (1) {
+        printf("Enter Phone       : ");
+        fgets(a.phone, sizeof(a.phone), stdin);
+        a.phone[strcspn(a.phone, "\n")] = 0;
+
+        if (isValidPhone(a.phone)) {
+            printf("Valid Phone Number\n");
+            break;
+        } else {
+            printf("Invalid number.\n");
+        }
+    }
+
+    printf("Create Account No : ");
+    scanf("%d", &a.acc_no);
+    getchar();
+
+    printf("Create PIN        : ");
+    scanf("%d", &a.pin);
+    getchar();
+
+    a.balance = 0;
+
+    fwrite(&a, sizeof(a), 1, fp);
+    fclose(fp);
+
+    printf("\nRegistration Successful!\n");
+}
+
+int login(struct Account *a) {
+    int acc, pin;
+    FILE *fp = fopen("bankdata.dat", "rb");
+
+    if (!fp) {
+        printf("No accounts found!\n");
+        return 0;
+    }
+
+    printf("\n===== LOGIN =====\n");
+    printf("Account Number : ");
+    scanf("%d", &acc);
+    printf("PIN           : ");
+    scanf("%d", &pin);
+
+    while (fread(a, sizeof(*a), 1, fp) == 1) {
+        if (a->acc_no == acc && a->pin == pin) {
+            fclose(fp);
+            return 1;
+        }
+    }
+
+    fclose(fp);
+    return 0;
+}
+
+void updateAccount(struct Account a) {
+    FILE *fp = fopen("bankdata.dat", "rb");
+    FILE *temp = fopen("temp.dat", "wb");
+    struct Account t;
+
+    while (fread(&t, sizeof(t), 1, fp) == 1) {
+        if (t.acc_no == a.acc_no)
+            fwrite(&a, sizeof(a), 1, temp);
+        else
+            fwrite(&t, sizeof(t), 1, temp);
+    }
+
+    fclose(fp);
+    fclose(temp);
+    remove("bankdata.dat");
+    rename("temp.dat", "bankdata.dat");
+}
+
+void menu(struct Account a) {
+    int choice;
+    float amt;
+
+    do {
+        printf("\n===== MENU =====\n");
+        printf("1. Check Balance\n");
+        printf("2. Deposit\n");
+        printf("3. Withdraw\n");
+        printf("4. Transfer\n");
+        printf("5. History (Simple)\n");
+        printf("6. Logout\n");
+        printf("Enter choice: ");
+        scanf("%d", &choice);
+
+        switch(choice) {
+            case 1:
+                printf("\nBalance: %.2f\n", a.balance);
+                break;
+
+            case 2:
+                printf("\nEnter amount to deposit: ");
+                scanf("%f", &amt);
+                a.balance += amt;
+                updateAccount(a);
+                printf("Amount Deposited\n");
+                break;
+
+            case 3:
+                printf("\nEnter amount to withdraw: ");
+                scanf("%f", &amt);
+                if (amt > a.balance)
+                    printf("Insufficient Balance\n");
+                else {
+                    a.balance -= amt;
+                    updateAccount(a);
+                    printf("Amount Withdrawn\n");
+                }
+                break;
+
+            case 4: {
+                int tacc;
+                float tamt;
+                printf("\nEnter Receiver Account No: ");
+                scanf("%d", &tacc);
+                printf("Enter Amount: ");
+                scanf("%f", &tamt);
+
+                if (tamt > a.balance) {
+                    printf("Not enough balance.\n");
+                    break;
+                }
+
+                FILE *fp = fopen("bankdata.dat", "rb");
+                struct Account r;
+                int ok = 0;
+
+                while (fread(&r, sizeof(r), 1, fp) == 1) {
+                    if (r.acc_no == tacc) {
+                        ok = 1;
+                        break;
+                    }
+                }
+                fclose(fp);
+
+                if (!ok) {
+                    printf("Receiver not found.\n");
+                    break;
+                }
+
+                r.balance += tamt;
+                updateAccount(r);
+
+                a.balance -= tamt;
+                updateAccount(a);
+
+                printf("%.2f Transferred Successfully!\n", tamt);
+                break;
+            }
+
+            case 5:
+                printf("\nHistory: (Simple)\n");
+                printf("Current Balance: %.2f\n", a.balance);
+                break;
+
+            case 6:
+                printf("\nLogged Out\n");
+                return;
+
+            default:
+                printf("Invalid choice!\n");
+        }
+    } while (1);
+}
+
+int main() {
+    int choice;
+    struct Account a;
+
+    while (1) {
+        printf("\n===== HOME =====\n");
+        printf("1. Register\n");
+        printf("2. Login\n");
+        printf("3. Exit\n");
+        printf("Choice: ");
+        scanf("%d", &choice);
+        getchar();  
+
+        if (choice == 1)
+            registerAccount();
+        else if (choice == 2) {
+            if (login(&a))
+                menu(a);
+            else
+                printf("\nInvalid Login!\n");
+        }
+        else if (choice == 3) {
+            printf("\nThank you!\n");
+            break;
+        }
+        else
+            printf("Invalid Option!\n");
+    }
+
+    return 0;
+}
